@@ -1,3 +1,12 @@
+# About
+This is a fork of OpenAI's whisper library that supports the selection of languages to detect from the audio file.
+
+# How to Use
+You can specify a subset of languages to detect by providing --languages option with a list of languages:
+
+    whisper --languages ko en jp
+
+In the above example, it will only detect Korean, English and Japanese languages from the audio. No more random unintended language transcription. Yay!
 # Whisper
 
 [[Blog]](https://openai.com/blog/whisper)
