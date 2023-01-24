@@ -72,6 +72,7 @@ def detect_language(model: "Whisper", mel: Tensor, tokenizer: Tokenizer = None) 
 class DecodingOptions:
     task: str = "transcribe"  # whether to perform X->X "transcribe" or X->English "translate"
     language: Optional[str] = None  # language that the audio is in; uses detected language if None
+    languages: Optional[Sequence[str]] = None  # list of languages to detect, all languages are considered if None
 
     # sampling-related options
     temperature: float = 0.0

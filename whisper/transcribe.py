@@ -92,6 +92,9 @@ def transcribe(
                 print("Detecting language using up to the first 30 seconds. Use `--language` to specify the language")
             segment = pad_or_trim(mel, N_FRAMES).to(model.device).to(dtype)
             _, probs = model.detect_language(segment)
+            selected_languages = decode_options.get("languages")
+            if selected_languages:
+                probs = {lang: probs[lang] for lang in selected_languages if probs[lang]}
             decode_options["language"] = max(probs, key=probs.get)
             if verbose is not None:
                 print(f"Detected language: {LANGUAGES[decode_options['language']].title()}")
@@ -265,6 +268,7 @@ def cli():
 
     parser.add_argument("--task", type=str, default="transcribe", choices=["transcribe", "translate"], help="whether to perform X->X speech recognition ('transcribe') or X->English translation ('translate')")
     parser.add_argument("--language", type=str, default=None, choices=sorted(LANGUAGES.keys()) + sorted([k.title() for k in TO_LANGUAGE_CODE.keys()]), help="language spoken in the audio, specify None to perform language detection")
+    parser.add_argument("--languages", nargs="+", type=str, default=None, choices=sorted(LANGUAGES.keys()) + sorted([k.title() for k in TO_LANGUAGE_CODE.keys()]), help="languages to detect in the audio, if None, all languages are considered.")
 
     parser.add_argument("--temperature", type=float, default=0, help="temperature to use for sampling")
     parser.add_argument("--best_of", type=optional_int, default=5, help="number of candidates when sampling with non-zero temperature")
