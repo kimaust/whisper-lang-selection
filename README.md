@@ -7,6 +7,8 @@ You can specify a subset of languages to detect by providing --languages option 
     whisper --languages ko en jp
 
 In the above example, it will only detect Korean, English and Japanese languages from the audio. No more random unintended language transcription. Yay!
+
+Below is the original README from the [whisper](https://github.com/openai/whisper) github.
 # Whisper
 
 [[Blog]](https://openai.com/blog/whisper)
