@@ -1,8 +1,7 @@
 import argparse
 import os
-import sys
 import warnings
-from typing import List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Optional, Tuple, Union, TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -11,7 +10,7 @@ import tqdm
 from .audio import SAMPLE_RATE, N_FRAMES, HOP_LENGTH, pad_or_trim, log_mel_spectrogram
 from .decoding import DecodingOptions, DecodingResult
 from .tokenizer import LANGUAGES, TO_LANGUAGE_CODE, get_tokenizer
-from .utils import exact_div, format_timestamp, optional_int, optional_float, str2bool, get_writer
+from .utils import exact_div, format_timestamp, make_safe, optional_int, optional_float, str2bool, get_writer
 
 if TYPE_CHECKING:
     from .model import Whisper
@@ -27,6 +26,7 @@ def transcribe(
     logprob_threshold: Optional[float] = -1.0,
     no_speech_threshold: Optional[float] = 0.6,
     condition_on_previous_text: bool = True,
+    initial_prompt: Optional[str] = None,
     **decode_options,
 ):
     """
@@ -142,10 +142,11 @@ def transcribe(
     all_segments = []
     prompt_reset_since = 0
 
-    initial_prompt = decode_options.pop("initial_prompt", None) or []
-    if initial_prompt:
-        initial_prompt = tokenizer.encode(" " + initial_prompt.strip())
-        all_tokens.extend(initial_prompt)
+    if initial_prompt is not None:
+        initial_prompt_tokens = tokenizer.encode(" " + initial_prompt.strip())
+        all_tokens.extend(initial_prompt_tokens)
+    else:
+        initial_prompt_tokens = []
 
     def add_segment(
         *, start: float, end: float, text_tokens: torch.Tensor, result: DecodingResult
@@ -169,11 +170,7 @@ def transcribe(
             }
         )
         if verbose:
-            line = f"[{format_timestamp(start)} --> {format_timestamp(end)}] {text}\n"
-            # compared to just `print(line)`, this replaces any character not representable using
-            # the system default encoding with an '?', avoiding UnicodeEncodeError.
-            sys.stdout.buffer.write(line.encode(sys.getdefaultencoding(), errors="replace"))
-            sys.stdout.flush()
+            print(make_safe(f"[{format_timestamp(start)} --> {format_timestamp(end)}] {text}"))
 
     # show the progress bar when verbose is False (otherwise the transcribed text will be printed)
     num_frames = mel.shape[-1]
@@ -251,7 +248,11 @@ def transcribe(
             pbar.update(min(num_frames, seek) - previous_seek_value)
             previous_seek_value = seek
 
-    return dict(text=tokenizer.decode(all_tokens[len(initial_prompt):]), segments=all_segments, language=language)
+    return dict(
+        text=tokenizer.decode(all_tokens[len(initial_prompt_tokens):]),
+        segments=all_segments,
+        language=language
+    )
 
 
 def cli():
@@ -301,21 +302,18 @@ def cli():
         args["language"] = "en"
 
     temperature = args.pop("temperature")
-    temperature_increment_on_fallback = args.pop("temperature_increment_on_fallback")
-    if temperature_increment_on_fallback is not None:
-        temperature = tuple(np.arange(temperature, 1.0 + 1e-6, temperature_increment_on_fallback))
+    if (increment := args.pop("temperature_increment_on_fallback")) is not None:
+        temperature = tuple(np.arange(temperature, 1.0 + 1e-6, increment))
     else:
         temperature = [temperature]
 
-    threads = args.pop("threads")
-    if threads > 0:
+    if (threads := args.pop("threads")) > 0:
         torch.set_num_threads(threads)
 
     from . import load_model
     model = load_model(model_name, device=device, download_root=model_dir)
 
     writer = get_writer(output_format, output_dir)
-
     for audio_path in args.pop("audio"):
         result = transcribe(model, audio_path, temperature=temperature, **args)
         writer(result, audio_path)
